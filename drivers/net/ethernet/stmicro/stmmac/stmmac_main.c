@@ -59,14 +59,11 @@
 #endif
 #include <linux/reset.h>
 #include <linux/amlogic/securitykey.h>
-#ifdef CONFIG_AMLOGIC_CPU_INFO
-#include <linux/amlogic/cpu_version.h>
-#endif
 
 extern unsigned int g_mac_addr_setup;
 
 #if defined (CONFIG_EFUSE)
-extern int efuse_get_mac(char *addr);
+extern char *efuse_get_mac(char *addr);
 #endif
 
 #define STMMAC_ALIGN(x)	L1_CACHE_ALIGN(x)
@@ -75,7 +72,7 @@ void __iomem *PREG_ETH_REG0;
 void __iomem *PREG_ETH_REG1;
 
 /* Module parameters */
-#define TX_TIMEO	10000
+#define TX_TIMEO	5000
 static int watchdog = TX_TIMEO;
 module_param(watchdog, int, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(watchdog, "Transmit timeout in milliseconds (10s)");
@@ -296,6 +293,8 @@ static void stmmac_eee_ctrl_timer(unsigned long arg)
 bool stmmac_eee_init(struct stmmac_priv *priv)
 {
 	bool ret = false;
+
+	goto out;
 
 	/* Using PCS we cannot dial with the phy registers at this stage
 	 * so we do not support extra feature like EEE.
@@ -632,8 +631,9 @@ static int stmmac_hwtstamp_ioctl(struct net_device *dev, struct ifreq *ifr)
 		 * 2^x * y == (y << x), hence
 		 * 2^32 * 50000000 ==> (50000000 << 32)
 		 */
-		temp = (u64) (50000000ULL << 32);
-		priv->default_addend = div_u64(temp, STMMAC_SYSCLOCK);
+		temp = div_u64(1000000000ULL << 32, priv->ioaddr);
+		//temp = (u64) (50000000ULL << 32);
+		priv->default_addend = div_u64(temp, priv->clk_ptp_rate);
 		priv->hw->ptp->config_addend(priv->ioaddr,
 					     priv->default_addend);
 
@@ -659,6 +659,18 @@ static int stmmac_init_ptp(struct stmmac_priv *priv)
 	if (!(priv->dma_cap.time_stamp || priv->dma_cap.atime_stamp))
 		return -EOPNOTSUPP;
 
+	priv->clk_ptp_ref = devm_clk_get(priv->device, "clk81"); /* Also used for SPDIF DAI */
+	if (IS_ERR(priv->clk_ptp_ref)) {
+		pr_err("stmmac: we can't use CLK81 for PTP; performance may be impacted");
+		pr_err("stmmac: fall back to 625");
+		priv->clk_ptp_rate = clk_get_rate(priv->stmmac_clk);
+		priv->clk_ptp_ref = NULL;
+	}
+	else {
+		clk_prepare_enable(priv->clk_ptp_ref);
+		priv->clk_ptp_rate = clk_get_rate(priv->clk_ptp_ref);
+	}
+
 	priv->adv_ts = 0;
 	if (priv->dma_cap.atime_stamp && priv->extend_desc)
 		priv->adv_ts = 1;
@@ -678,6 +690,8 @@ static int stmmac_init_ptp(struct stmmac_priv *priv)
 
 static void stmmac_release_ptp(struct stmmac_priv *priv)
 {
+	if (priv->clk_ptp_ref)
+		clk_disable_unprepare(priv->clk_ptp_ref);
 	stmmac_ptp_unregister(priv);
 }
 
@@ -2259,7 +2273,7 @@ static void stmmac_check_ether_addr(struct stmmac_priv *priv)
  */
 static int stmmac_init_dma_engine(struct stmmac_priv *priv)
 {
-	int pbl = DEFAULT_DMA_PBL, fixed_burst = 0, burst_len = 0;
+	int pbl = 32, fixed_burst = 0, burst_len = 0;
 	int mixed_burst = 0;
 	int atds = 0;
 
@@ -2429,12 +2443,6 @@ static int stmmac_open(struct net_device *dev)
 
 	int ret = 0;
 
-#ifdef CONFIG_AMLOGIC_CPU_INFO
-	static const u8 def_mac[] = {0x00, 0x15, 0x18, 0x01, 0x81, 0x31};
-	unsigned int low0, low1, high0, high1;
-	u8 buf[6];
-#endif
-
 	if (g_mac_addr_setup == 0) {
 #if defined (CONFIG_AML_NAND_KEY) || defined (CONFIG_SECURITYKEY)
 		ret = read_mac_from_nand(dev);
@@ -2442,24 +2450,10 @@ static int stmmac_open(struct net_device *dev)
 #endif
 		{
 #if defined CONFIG_EFUSE
-			ret = efuse_get_mac(dev->dev_addr);
+			efuse_get_mac(dev->dev_addr);
 #endif
 		}
 	}
-
-#ifdef CONFIG_AMLOGIC_CPU_INFO
-	if (ether_addr_equal(priv->dev->dev_addr, def_mac) ||
-	    !is_valid_ether_addr(priv->dev->dev_addr) ||
-	    ret < 0) {
-		printk("%s: generate MAC from CPU serial number\n", __func__);
-		cpuinfo_get_chipid(&low0, &low1, &high0, &high1);
-		memcpy(buf, &low0, 6);
-		buf[0] &= 0xfe;  /* clear multicast bit */
-		buf[0] |= 0x02;  /* set local assignment bit (IEEE802) */
-		printk("%s: generated MAC address: %pM\n", __func__, buf);
-		ether_addr_copy(dev->dev_addr, buf);
-	}
-#endif
 
 	stmmac_check_ether_addr(priv);
 
@@ -2708,13 +2702,15 @@ static netdev_tx_t stmmac_xmit(struct sk_buff *skb, struct net_device *dev)
 	 * stmmac_tx function. This approach takes care about the fragments.
 	 */
 	priv->tx_count_frames += nfrags + 1;
-	if (priv->tx_coal_frames > priv->tx_count_frames) {
+	if (priv->tx_coal_frames > priv->tx_count_frames && !priv->tx_timer_armed) {
 		priv->hw->desc->clear_tx_ic(desc);
 		priv->xstats.tx_reset_ic_bit++;
 		mod_timer(&priv->txtimer,
 			  STMMAC_COAL_TIMER(priv->tx_coal_timer));
+		priv->tx_timer_armed = true;
 	} else
 		priv->tx_count_frames = 0;
+		priv->tx_timer_armed = false;
 
 	/* To avoid raise condition */
 	priv->hw->desc->set_tx_owner(first);
@@ -2902,6 +2898,9 @@ static int stmmac_rx(struct stmmac_priv *priv, int limit)
 
 			frame_len = priv->hw->desc->get_rx_frame_len(p, coe);
 
+			if (frame_len > 3582)
+				break;
+
 			/* ACS is set; GMAC core strips PAD/FCS for IEEE 802.3
 			 * Type frames (LLC/LLC-SNAP)
 			 */
@@ -2986,6 +2985,20 @@ static int stmmac_poll(struct napi_struct *napi, int budget)
 	return work_done;
 }
 
+static void stmmac_service_event_schedule(struct stmmac_priv *priv)
+{
+	if (!test_bit(STMMAC_DOWN, &priv->state) &&
+	    !test_and_set_bit(STMMAC_SERVICE_SCHED, &priv->state))
+		queue_work(priv->wq, &priv->service_task);
+}
+
+static void stmmac_global_err(struct stmmac_priv *priv)
+{
+	netif_carrier_off(priv->dev);
+	set_bit(STMMAC_RESET_REQUESTED, &priv->state);
+	stmmac_service_event_schedule(priv);
+}
+
 /**
  *  stmmac_tx_timeout
  *  @dev : Pointer to net device structure
@@ -2998,8 +3011,7 @@ static void stmmac_tx_timeout(struct net_device *dev)
 {
 	struct stmmac_priv *priv = netdev_priv(dev);
 
-	/* Clear Tx resources and restart transmitting again */
-	stmmac_tx_err(priv);
+	stmmac_global_err(priv);
 }
 
 /* Configuration changes (passed on by ifconfig) */
@@ -3124,6 +3136,10 @@ static irqreturn_t stmmac_interrupt(int irq, void *dev_id)
 		pr_err("%s: invalid dev pointer\n", __func__);
 		return IRQ_NONE;
 	}
+
+	/* Check if adapter is up */
+	if (test_bit(STMMAC_DOWN, &priv->state))
+		return IRQ_HANDLED;
 
 	/* To handle GMAC own interrupts */
 	if (priv->plat->has_gmac) {
@@ -3395,6 +3411,39 @@ static const struct net_device_ops stmmac_netdev_ops = {
 	.ndo_set_mac_address = eth_mac_addr,
 };
 
+static void stmmac_reset_subtask(struct stmmac_priv *priv)
+{
+	if (!test_and_clear_bit(STMMAC_RESET_REQUESTED, &priv->state))
+		return;
+	if (test_bit(STMMAC_DOWN, &priv->state))
+		return;
+
+	netdev_err(priv->dev, "Reset adapter.\n");
+
+	rtnl_lock();
+        stmmac_release(priv->dev);
+        stmmac_open(priv->dev);
+	while (test_and_set_bit(STMMAC_RESETTING, &priv->state))
+		usleep_range(1000, 2000);
+
+	set_bit(STMMAC_DOWN, &priv->state);
+	dev_close(priv->dev);
+	dev_open(priv->dev);
+	clear_bit(STMMAC_DOWN, &priv->state);
+	clear_bit(STMMAC_RESETTING, &priv->state);
+	rtnl_unlock();
+}
+
+static void stmmac_service_task(struct work_struct *work)
+{
+	struct stmmac_priv *priv = container_of(work, struct stmmac_priv,
+			service_task);
+
+	stmmac_reset_subtask(priv);
+	clear_bit(STMMAC_SERVICE_SCHED, &priv->state);
+}
+
+
 /**
  *  stmmac_hw_init - Init the MAC device
  *  @priv: driver private structure
@@ -3492,6 +3541,16 @@ static void moniter_tx_handler(struct work_struct *work)
 		priv = netdev_priv(c_phy_dev->attached_dev);
 		if (priv) {
 			if (c_phy_dev->link) {
+                               if (priv->dev->stats.tx_packets > 100) {
+                                       if (priv->dev->stats.rx_packets == 0) {
+                                               pr_info("rx stop, recover eth\n");
+                                               stmmac_release(priv->dev);
+                                               stmmac_open(priv->dev);
+                                       }
+                               }
+                               priv->dev->stats.tx_packets++;
+                               priv->dev->stats.tx_packets++;
+
 				if (priv->dirty_tx != priv->cur_tx &&
 						check_tx == 0) {
 					pr_debug("tx queueing\n");
@@ -3551,6 +3610,14 @@ struct stmmac_priv *stmmac_dvr_probe(struct device *device,
 
 	/* Verify driver arguments */
 	stmmac_verify_args();
+	/* Allocate workqueue */
+	priv->wq = create_singlethread_workqueue("stmmac_wq");
+	if (!priv->wq) {
+		dev_err(priv->device, "failed to create workqueue\n");
+		goto error_wq;
+	}
+
+	INIT_WORK(&priv->service_task, stmmac_service_task);
 
 	/* Override with kernel parameters if supplied XXX CRS XXX
 	 * this needs to have multiple instances
@@ -3674,7 +3741,9 @@ error_netdev_register:
 	netif_napi_del(&priv->napi);
 error_hw_init:
 	clk_disable_unprepare(priv->stmmac_clk);
+	destroy_workqueue(priv->wq);
 error_clk_get:
+error_wq:
 	free_netdev(ndev);
 
 	return NULL;
@@ -3701,6 +3770,7 @@ int stmmac_dvr_remove(struct net_device *ndev)
 	if (priv->pcs != STMMAC_PCS_RGMII && priv->pcs != STMMAC_PCS_TBI &&
 	    priv->pcs != STMMAC_PCS_RTBI)
 		stmmac_mdio_unregister(ndev);
+	destroy_workqueue(priv->wq);
 	netif_carrier_off(ndev);
 	unregister_netdev(ndev);
 	if (priv->stmmac_rst)

@@ -53,6 +53,7 @@ struct stmmac_priv {
 	u32 tx_count_frames;
 	u32 tx_coal_frames;
 	u32 tx_coal_timer;
+	bool tx_timer_armed;
 	struct stmmac_tx_info *tx_skbuff_dma;
 	dma_addr_t dma_tx_phy;
 	int tx_coalesce;
@@ -118,6 +119,19 @@ struct stmmac_priv {
 	int irq_wake;
 	spinlock_t ptp_lock;
 	int phy_wol;
+	struct clk *clk_ptp_ref;
+	unsigned int clk_ptp_rate;
+
+	unsigned long state;
+	struct workqueue_struct *wq;
+	struct work_struct service_task;
+};
+
+enum stmmac_state {
+	STMMAC_DOWN,
+	STMMAC_RESET_REQUESTED,
+	STMMAC_RESETTING,
+	STMMAC_SERVICE_SCHED,
 };
 
 int stmmac_mdio_unregister(struct net_device *ndev);
