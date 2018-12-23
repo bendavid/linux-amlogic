@@ -59,6 +59,8 @@ static int rtl8211f_config_init(struct phy_device *phydev)
 			return bmcr;
 	} while (bmcr & BMCR_RESET);
 
+    printk("rtl8211f_config_init");
+    
 	/* we want to disable eee */
 	phy_write(phydev, RTL8211F_MMD_CTRL, 0x7);
 	phy_write(phydev, RTL8211F_MMD_DATA, 0x3c);
