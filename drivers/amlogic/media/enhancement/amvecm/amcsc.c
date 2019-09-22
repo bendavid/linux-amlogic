@@ -319,20 +319,20 @@ static uint hdr_mode = 2; /* 0: hdr->hdr, 1:hdr->sdr, 2:auto */
 module_param(hdr_mode, uint, 0664);
 MODULE_PARM_DESC(hdr_mode, "\n set hdr_mode\n");
 
-static uint hdr_process_mode = 1; /* 0: hdr->hdr, 1:hdr->sdr */
-static uint cur_hdr_process_mode = 2; /* 0: hdr->hdr, 1:hdr->sdr */
+static uint hdr_process_mode = 1; /* 0: hdr10->hdr10, 1:hdr10->sdr */
+static uint cur_hdr_process_mode = 2; /* 0: hdr10->hdr10, 1:hdr10->sdr */
 module_param(hdr_process_mode, uint, 0444);
 MODULE_PARM_DESC(hdr_process_mode, "\n current hdr_process_mode\n");
 
-static uint hdr10_plus_process_mode; /* 0: bypass, 1:hdr10p->sdr */
-static uint cur_hdr10_plus_process_mode = 2; /* 0: bypass, 1:hdr10p->sdr */
+static uint hdr10_plus_process_mode; /* 0: bypass, 1:hdr10p->hdr10/sdr */
+static uint cur_hdr10_plus_process_mode = 2; /* 0: bypass, 1:hdr10p->hdr10/sr */
 
 /* 0: tx don't support hdr10+, 1: tx support hdr10+*/
 static uint tx_hdr10_plus_support;
 
-/* 0: hlg->hlg, 1:hlg->hdr*/
+/* 0: hlg->hlg, 1:hlg->hdr10/sdr*/
 static uint hlg_process_mode = 1;
-/* 0: hdr->hdr, 1:hdr->sdr 2:hlg->hdr*/
+/* 0: hlg->hlg, 1:hlg->hdr10/sdr*/
 static uint cur_hlg_process_mode = 2;
 module_param(hlg_process_mode, uint, 0444);
 MODULE_PARM_DESC(hlg_process_mode, "\n current hlg_process_mode\n");
@@ -5955,10 +5955,14 @@ static void hdr_support_process(struct vinfo_s *vinfo)
 				hlg_process_mode = 0;
 			else
 				hlg_process_mode = 1;
-		} else
+			if (tx_hdr10_plus_support)
+				hdr10_plus_process_mode = 0;
+			else
+				hdr10_plus_process_mode = 1;
+		} else {
 			hlg_process_mode = 0;
-
-		hdr10_plus_process_mode = 0;
+			hdr10_plus_process_mode = 0;
+		}
 	}
 
 	if (sdr_mode == 2) { /* auto */
@@ -6040,7 +6044,7 @@ static void hdr_tx_pkt_cb(
 			}
 		} else if ((hdr_process_mode == 0) &&
 			(hlg_process_mode == 0) &&
-			(csc_type == VPP_MATRIX_BT2020YUV_BT2020RGB)) {
+			((csc_type == VPP_MATRIX_BT2020YUV_BT2020RGB) || ((csc_type=VPP_MATRIX_BT2020YUV_BT2020RGB_DYNAMIC) && (hdr10_plus_process_mode==1) ))) {
 			/* source is hdr, send hdr info */
 			/* use the features to discribe source info */
 			send_info.features =
@@ -6066,7 +6070,7 @@ static void hdr_tx_pkt_cb(
 			}
 		} else if ((hdr_process_mode == 0) &&
 			(hlg_process_mode == 1) &&
-			(csc_type == VPP_MATRIX_BT2020YUV_BT2020RGB)) {
+			((csc_type == VPP_MATRIX_BT2020YUV_BT2020RGB) || ((csc_type=VPP_MATRIX_BT2020YUV_BT2020RGB_DYNAMIC) && (hdr10_plus_process_mode==1) ))) {
 			/* source is hdr, send hdr info */
 			/* use the features to discribe source info */
 			if (get_hdr_type() & HLG_FLAG)
@@ -6233,7 +6237,7 @@ static void video_process(
 				"hlg_process_mode = 0x%x.\n",
 			hdr_process_mode, hlg_process_mode);
 		}
-	} else if ((csc_type == VPP_MATRIX_BT2020YUV_BT2020RGB) &&
+	} else if ( ((csc_type == VPP_MATRIX_BT2020YUV_BT2020RGB) || (csc_type == VPP_MATRIX_BT2020YUV_BT2020RGB_DYNAMIC) && (hdr10_plus_process_mode == 1)) &&
 		(hdr_process_mode == 0) &&
 		(hlg_process_mode == 1)) {
 		/* hdr->hdr hlg->hlg*/
@@ -6277,7 +6281,7 @@ static void video_process(
 				"hlg_process_mode = 0x%x.\n",
 				hdr_process_mode, hlg_process_mode);
 		}
-	} else if ((csc_type == VPP_MATRIX_BT2020YUV_BT2020RGB) &&
+	} else if ( ((csc_type == VPP_MATRIX_BT2020YUV_BT2020RGB) || (csc_type == VPP_MATRIX_BT2020YUV_BT2020RGB_DYNAMIC) && (hdr10_plus_process_mode == 1)) &&
 		(hdr_process_mode == 0) && (hlg_process_mode == 0)) {
 		/* hdr->hdr hlg->hlg*/
 		if ((signal_change_flag &
@@ -6294,7 +6298,7 @@ static void video_process(
 				hdr_process_mode, hlg_process_mode);
 		}
 	} else if ((csc_type == VPP_MATRIX_BT2020YUV_BT2020RGB_DYNAMIC) &&
-		(hdr10_plus_process_mode == 1)) {
+		(hdr10_plus_process_mode == 1) && (hdr_process_mode == 1)) {
 		if ((signal_change_flag & SIG_HDR10_PLUS_MODE) ||
 			(cur_csc_type !=
 			VPP_MATRIX_BT2020YUV_BT2020RGB_DYNAMIC))
@@ -6381,7 +6385,7 @@ static void video_process(
 		cur_csc_type = csc_type;
 
 		if (vf) {
-			if ((cur_csc_type == VPP_MATRIX_BT2020YUV_BT2020RGB) &&
+			if ( ((csc_type == VPP_MATRIX_BT2020YUV_BT2020RGB) || (csc_type == VPP_MATRIX_BT2020YUV_BT2020RGB_DYNAMIC) && (hdr10_plus_process_mode == 1) && (hdr_process_mode == 0)) &&
 				(cur_csc_type != 0xffff) &&
 				(vf->source_type == VFRAME_SOURCE_TYPE_HDMI)) {
 				amvecm_wakeup_queue();
