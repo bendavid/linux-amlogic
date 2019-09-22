@@ -6003,6 +6003,8 @@ static void hdr_tx_pkt_cb(
 	struct vout_device_s *vdev = NULL;
 	struct master_display_info_s send_info;
 
+    pr_err("entering hdr_tx_pkt_cb\n");
+    
 	if (vinfo->vout_device)
 		vdev = vinfo->vout_device;
 
@@ -6054,6 +6056,7 @@ static void hdr_tx_pkt_cb(
 					| (10 << 0);	/* bt2020c */
 			amvecm_cp_hdr_info(&send_info, p);
 			if (vdev) {
+				pr_err("HDR10 output: maxcll = %u, maxfall = %u\n",send_info.max_content, send_info.max_frame_average);
 				if (vdev->fresh_tx_hdr_pkt)
 					vdev->fresh_tx_hdr_pkt(&send_info);
 			}
@@ -6092,6 +6095,7 @@ static void hdr_tx_pkt_cb(
 					| (10 << 0);	/* bt2020c */
 			amvecm_cp_hdr_info(&send_info, p);
 			if (vdev) {
+				pr_err("HDR10 output: maxcll = %u, maxfall = %u\n",send_info.max_content, send_info.max_frame_average);
 				if (vdev->fresh_tx_hdr_pkt)
 					vdev->fresh_tx_hdr_pkt(&send_info);
 			}
