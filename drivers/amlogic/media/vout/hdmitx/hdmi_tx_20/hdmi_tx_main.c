@@ -440,6 +440,7 @@ static void hdrinfo_to_vinfo(struct vinfo_s *info, struct hdmitx_dev *hdev)
 	info->hdr_info.lumi_min = hdev->RXCap.hdr_lum_min;
 	pr_info(SYS "update rx hdr info %x\n",
 		info->hdr_info.hdr_support);
+    pr_info(SYS "hdrinfo_to_vinfo: maxcll = %u, maxfall = %u\n",info->master_display_info.max_content, info->master_display_info.max_frame_average);
 }
 
 static void rxlatency_to_vinfo(struct vinfo_s *info, struct rx_cap *rx)
