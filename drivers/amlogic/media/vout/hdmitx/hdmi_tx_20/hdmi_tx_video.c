@@ -896,6 +896,7 @@ static int is_dvi_device(struct rx_cap *prxcap)
 int hdmitx_set_display(struct hdmitx_dev *hdev, enum hdmi_vic VideoCode)
 {
 	struct hdmitx_vidpara *param = NULL;
+	struct vinfo_s *info = NULL;
 	enum hdmi_vic vic;
 	int i, ret = -1;
 	unsigned char AVI_DB[32];
@@ -908,55 +909,24 @@ int hdmitx_set_display(struct hdmitx_dev *hdev, enum hdmi_vic VideoCode)
 		AVI_DB[i] = 0;
 
 	vic = hdev->hwop.getstate(hdev, STAT_VIDEO_VIC, 0);
+	pr_err("hdmitx_set_display: vic = %d, VideoCode = %d\n", vic, VideoCode);
 	pr_info(VID "already init VIC = %d  Now VIC = %d\n",
 		vic, VideoCode);
 	if ((vic != HDMI_Unknown) && (vic == VideoCode))
 		hdev->cur_VIC = vic;
 
 	param = hdmi_get_video_param(VideoCode);
-	if (hdev->cur_video_param != NULL)
-		param->color_depth = hdev->cur_video_param->color_depth;
+// 	if (hdev->cur_video_param != NULL)
+// 		param->color_depth = hdev->cur_video_param->color_depth;
 	hdev->cur_video_param = param;
 	if (param) {
-		param->color = param->color_prefer;
-		/* HDMI CT 7-24 Pixel Encoding
-		 * YCbCr to YCbCr Sink
-		 */
-		switch (hdev->rxcap.native_Mode & 0x30) {
-		case 0x20:/*bit5==1, then support YCBCR444 + RGB*/
-			param->color = COLORSPACE_YUV444;
-			break;
-		case 0x10:/*bit4==1, then support YCBCR422 + RGB*/
-			param->color = COLORSPACE_YUV422;
-			break;
-		case 0x30:
-            param->color = hdev->para->cs;
-			break;
-		default:
-			param->color = COLORSPACE_RGB444;
-		}
-		/* For Y420 modes */
-		switch (VideoCode) {
-		case HDMI_3840x2160p50_16x9_Y420:
-		case HDMI_3840x2160p60_16x9_Y420:
-		case HDMI_4096x2160p50_256x135_Y420:
-		case HDMI_4096x2160p60_256x135_Y420:
-			param->color = COLORSPACE_YUV420;
-			break;
-		default:
-			break;
-		}
 
-		if (param->color == COLORSPACE_RGB444) {
-			hdev->para->cs = hdev->cur_video_param->color;
-			pr_info(VID "rx edid only support RGB format\n");
-		}
-
-		if (VideoCode >= HDMITX_VESA_OFFSET) {
-			hdev->para->cs = COLORSPACE_RGB444;
-			hdev->para->cd = COLORDEPTH_24B;
-			pr_info("hdmitx: VESA only support RGB format\n");
-		}
+		// synchronize parameters since hdmitx is never
+		// doing any conversion now
+		param->color = hdev->para->cs;
+		param->color_depth = hdev->para->cd;
+		
+		pr_err("hdmi_tx_video:  param->color_prefer = %d, param->color = %d, hdev->para->cs = %d\n", param->color_prefer, param->color, hdev->para->cs);
 
 		if (hdev->hwop.setdispmode(hdev) >= 0) {
 			/* HDMI CT 7-33 DVI Sink, no HDMI VSDB nor any

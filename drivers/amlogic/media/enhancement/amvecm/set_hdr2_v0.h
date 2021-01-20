@@ -98,7 +98,8 @@ enum hdr_process_sel {
 	SRGB_YUVF = 19,
 	SDR_SRGB_GMT_CONV = 20,
 	IPT_MAP = 21,
-	HDR_p_MAX
+	HDR_p_MAX,
+    SDR_BYPASS
 };
 
 enum hdr_hist_sel {
@@ -163,7 +164,8 @@ void oetf_float_gen(int64_t *bin_e, MenuFun oetf);
 void nolinear_lut_gen(int64_t *bin_c, MenuFun cgain);
 extern enum hdr_process_sel hdr_func(enum hdr_module_sel module_sel,
 	enum hdr_process_sel hdr_process_select,
-	struct vinfo_s *vinfo);
+	struct vinfo_s *vinfo,
+    enum vpp_matrix_csc_e csc_type);
 /*G12A vpp matrix*/
 enum vpp_matrix_e {
 	VD1_MTX = 0x1,
@@ -226,3 +228,6 @@ extern unsigned int hdr10_clip_mode;
 void get_hist(
 	enum hdr_module_sel module_sel,
 	enum hdr_hist_sel hist_sel);
+
+uint get_sdr2hdrmap(void);
+uint get_hdr2sdrmap(void);

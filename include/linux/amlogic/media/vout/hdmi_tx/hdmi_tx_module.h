@@ -176,6 +176,7 @@ struct rx_cap {
 	/*blk0 check sum*/
 	unsigned char blk0_chksum;
 	unsigned char chksum[10];
+    unsigned char vcdb;
 };
 
 struct cts_conftab {

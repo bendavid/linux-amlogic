@@ -295,6 +295,16 @@ struct rx_av_latency {
 	unsigned int i_aLatency;
 };
 
+enum color_range {
+	VINFO_COLOR_RANGE_LIM,
+	VINFO_COLOR_RANGE_FULL,
+};
+
+enum colorspace {
+	VINFO_BT601,
+	VINFO_BT709,
+};
+
 struct vinfo_s {
 	char *name;
 	enum vmode_e mode;
@@ -315,6 +325,8 @@ struct vinfo_s {
 	enum vinfo_3d_e info_3d;
 	enum vout_fr_adj_type_e fr_adj_type;
 	enum color_fmt_e viu_color_fmt;
+    enum color_range col_range;
+	enum colorspace default_colorspace;
 	enum viu_mux_e viu_mux;
 	struct master_display_info_s master_display_info;
 	struct hdr_info hdr_info;

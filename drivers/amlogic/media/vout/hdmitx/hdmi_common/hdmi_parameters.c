@@ -2816,7 +2816,7 @@ static void hdmi_parse_attr(struct hdmi_format_para *para, char const *name)
 	}
 	/* set default value */
 	if (i == sizeof(parse_cd_) / sizeof(struct parse_cd))
-		para->cd = COLORDEPTH_24B;
+		para->cd = COLORDEPTH_30B;
 
 	/* parse color space */
 	for (i = 0; i < sizeof(parse_cs_) / sizeof(struct parse_cs); i++) {
@@ -2838,7 +2838,7 @@ static void hdmi_parse_attr(struct hdmi_format_para *para, char const *name)
 	}
 	/* set default value */
 	if (i == sizeof(parse_cr_) / sizeof(struct parse_cr))
-		para->cr = COLORRANGE_FUL;
+		para->cr = COLORRANGE_LIM;
 }
 
 /*

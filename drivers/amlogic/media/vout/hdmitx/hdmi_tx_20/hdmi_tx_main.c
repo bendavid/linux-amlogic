@@ -277,6 +277,8 @@ static  int  set_disp_mode(const char *mode)
 {
 	int ret =  -1;
 	enum hdmi_vic vic;
+	
+	pr_err("set_disp_mode\n");
 
 	vic = hdmitx_edid_get_VIC(&hdmitx_device, mode, 1);
 	if (strncmp(mode, "2160p30hz", strlen("2160p30hz")) == 0)
@@ -498,6 +500,7 @@ static void edidinfo_detach_to_vinfo(struct hdmitx_dev *hdev)
 
 static int set_disp_mode_auto(void)
 {
+	pr_err("set_disp_mode_auto\n");
 	int ret =  -1;
 
 	struct vinfo_s *info = NULL;
@@ -571,56 +574,61 @@ static int set_disp_mode_auto(void)
 			}
 		}
 	}
+	
+	pr_err("hdev->para->cs = %d\n", hdev->para->cs);
 
-	para = hdmi_get_fmt_name(mode, hdev->fmt_attr);
-	/* force 4k50/60Hz to 420 unless manually set */
-	if (strstr(hdmitx_device.fmt_attr,"422") == NULL){
-		switch ((para->vic) & 0xff) {
-			case HDMI_3840x2160p50_16x9:
-			case HDMI_3840x2160p60_16x9:
-			case HDMI_4096x2160p50_256x135:
-			case HDMI_4096x2160p60_256x135:
-			case HDMI_3840x2160p50_64x27:
-			case HDMI_3840x2160p60_64x27:
-				para->cs = COLORSPACE_YUV420;
-				break;
-			default:
-				break;
-		}
-	}
-	hdev->para = para;
 
-	if (hdev->cur_video_param != NULL){
-		if (strstr(hdmitx_device.fmt_attr,"bit") != NULL){
-			hdev->cur_video_param->color_depth = para->cd;
-			pr_info("hdmitx: display colourdepth set by attr to %d in cur_param 0x%08x (VIC: %d)\n",hdev->cur_video_param->color_depth * 2,
-					hdev->cur_video_param,  hdev->cur_video_param->VIC);
-		} else {
-			hdev->cur_video_param->color_depth = COLORDEPTH_30B;
-			pr_info("hdmitx: display colourdepth is %d in cur_param 0x%08x (VIC: %d)\n",hdev->cur_video_param->color_depth * 2,
-					hdev->cur_video_param,  hdev->cur_video_param->VIC);
-		}
-		if (hdev->cur_video_param->color_depth > COLORDEPTH_24B){
-			int dc_support = 0;
-			if (hdev->rxcap.ColorDeepSupport & 0x78 && hdev->para->cs != COLORSPACE_YUV420)
-				dc_support = 1;
-			else if ((hdev->rxcap.hf_ieeeoui) &&
-					((hdev->rxcap.dc_30bit_420 && hdev->cur_video_param->color_depth == COLORDEPTH_30B) ||
-					 (hdev->rxcap.dc_36bit_420 && hdev->cur_video_param->color_depth == COLORDEPTH_36B) ||
-					 (hdev->rxcap.dc_48bit_420 && hdev->cur_video_param->color_depth == COLORDEPTH_48B)))
-				dc_support = 1;
-			if (! dc_support){
-				pr_warn("Bitdepth is set to %d bits but display does not support deep colour",
-						hdev->cur_video_param->color_depth * 2);
-				/* drop to 8 bit unless forced */
-				if (strstr(hdmitx_device.fmt_attr,"bit") == NULL)
-					hdev->cur_video_param->color_depth = COLORDEPTH_24B;
-			}
-		}
-	}
+	
+	
+
+// 	if (hdev->cur_video_param != NULL){
+// 		if (strstr(hdmitx_device.fmt_attr,"bit") != NULL){
+// 			hdev->cur_video_param->color_depth = para->cd;
+// 			pr_info("hdmitx: display colourdepth set by attr to %d in cur_param 0x%08x (VIC: %d)\n",hdev->cur_video_param->color_depth * 2,
+// 					hdev->cur_video_param,  hdev->cur_video_param->VIC);
+// 		} else {
+// 			hdev->cur_video_param->color_depth = COLORDEPTH_30B;
+// 			pr_info("hdmitx: display colourdepth is %d in cur_param 0x%08x (VIC: %d)\n",hdev->cur_video_param->color_depth * 2,
+// 					hdev->cur_video_param,  hdev->cur_video_param->VIC);
+// 		}
+// 		if (hdev->cur_video_param->color_depth > COLORDEPTH_24B){
+// 			int dc_support = 0;
+// 			if (hdev->rxcap.ColorDeepSupport & 0x78 && hdev->para->cs != COLORSPACE_YUV420)
+// 				dc_support = 1;
+// 			else if ((hdev->rxcap.hf_ieeeoui) &&
+// 					((hdev->rxcap.dc_30bit_420 && hdev->cur_video_param->color_depth == COLORDEPTH_30B) ||
+// 					 (hdev->rxcap.dc_36bit_420 && hdev->cur_video_param->color_depth == COLORDEPTH_36B) ||
+// 					 (hdev->rxcap.dc_48bit_420 && hdev->cur_video_param->color_depth == COLORDEPTH_48B)))
+// 				dc_support = 1;
+// 			if (! dc_support){
+// 				pr_warn("Bitdepth is set to %d bits but display does not support deep colour",
+// 						hdev->cur_video_param->color_depth * 2);
+// 				/* drop to 8 bit unless forced */
+// 				if (strstr(hdmitx_device.fmt_attr,"bit") == NULL)
+// 					hdev->cur_video_param->color_depth = COLORDEPTH_24B;
+// 			}
+// 		}
+// 		
+// 		// force 4k50/60Hz to 8bit for 444 modes to avoid hdmi 2.0 bandwidth limits
+// 		switch ((para->vic) & 0xff) {
+// 			case HDMI_3840x2160p50_16x9:
+// 			case HDMI_3840x2160p60_16x9:
+// 			case HDMI_4096x2160p50_256x135:
+// 			case HDMI_4096x2160p60_256x135:
+// 			case HDMI_3840x2160p50_64x27:
+// 			case HDMI_3840x2160p60_64x27:
+// 				if (hdev->para->cs == COLORSPACE_YUV444 || hdev->para->cs == COLORSPACE_RGB444) {
+// 					pr_warn("4k50/60Hz not supported for 10bits 444, falling back to 8bit color depth\n");
+// 					hdev->cur_video_param->color_depth = COLORDEPTH_24B;
+// 				}
+// 				break;
+// 			default:
+// 				break;
+// 		}
+// 	}
 
 	/* and recover the original bitstream bitdepth */
-	para->cd = stream_cur_cd;
+// 	para->cd = stream_cur_cd;
 
 	vic = hdmitx_edid_get_VIC(hdev, mode, 1);
 	if (strncmp(info->name, "2160p30hz", strlen("2160p30hz")) == 0) {
@@ -637,6 +645,268 @@ static int set_disp_mode_auto(void)
 	else {
 	/* nothing */
 	}
+	
+	// defaults are YUV444, 10bit, limited range, with various special
+	// cases and edid checks below
+	para = hdmi_get_fmt_name(mode, hdev->fmt_attr);
+	
+	/* force 4k50/60Hz to 420 unless manually set to something else */
+	/* and also fall back to 444 for modes which don't support 420 */
+	switch ((para->vic) & 0xff) {
+		case HDMI_3840x2160p50_16x9:
+		case HDMI_3840x2160p60_16x9:
+		case HDMI_4096x2160p50_256x135:
+		case HDMI_4096x2160p60_256x135:
+		case HDMI_3840x2160p50_64x27:
+		case HDMI_3840x2160p60_64x27:
+			if (strstr(hdmitx_device.fmt_attr,"422") == NULL &&
+				strstr(hdmitx_device.fmt_attr,"444") == NULL &&
+				strstr(hdmitx_device.fmt_attr,"rgb") == NULL) {
+				para->cs = COLORSPACE_YUV420;
+			}
+			break;
+		default:
+			if (para->cs == COLORSPACE_YUV420) {
+				para->cs = COLORSPACE_YUV444;
+			}
+			break;
+	}
+	
+	// check colorspace against edid capabilities
+	if (para->cs == COLORSPACE_YUV444 && !(hdev->rxcap.native_Mode & 0x20) && strstr(hdmitx_device.fmt_attr,"444") == NULL) {
+		// YUV444 set but not supported by display, fall back to alternative
+		if (hdev->rxcap.native_Mode & 0x10) {
+			para->cs = COLORSPACE_YUV422;
+		}
+		else {
+			para->cs = COLORSPACE_YUV420;
+		}
+	}
+	if (para->cs == COLORSPACE_YUV422 && !(hdev->rxcap.native_Mode & 0x10) && strstr(hdmitx_device.fmt_attr,"422") == NULL) {
+		// YUV422 set but not supported by display, fall back to alternative
+		if (hdev->rxcap.native_Mode & 0x20) {
+			para->cs = COLORSPACE_YUV444;
+		}
+		else {
+			para->cs = COLORSPACE_YUV420;
+		}
+	}
+	if (para->cs == COLORSPACE_YUV420 && !(hdev->rxcap.native_Mode & 0x20) && strstr(hdmitx_device.fmt_attr,"420") == NULL) {
+		enum hdmi_vic vic420 = para->vic;
+		if (vic420 < HDMITX_VIC420_OFFSET) {
+			vic420 += HDMITX_VIC420_OFFSET;
+		}
+		
+		// look for vic in edid for 420 support
+		bool found = false;
+		
+		if (vic420 < HDMITX_VESA_OFFSET) {
+			unsigned int ivic;
+			for (ivic = 0; ivic < hdev->rxcap.VIC_count; ++ivic) {
+				if (hdev->rxcap.VIC[ivic] == vic420) {
+					found = true;
+					break;
+				}
+			}
+		}
+		
+		if (!found) {
+			// YUV 420 set but not supported by display for this mode, fall back to alternative
+			if (hdev->rxcap.native_Mode & 0x20) {
+				para->cs = COLORSPACE_YUV444;
+			}
+			else if (hdev->rxcap.native_Mode & 0x10) {
+				para->cs = COLORSPACE_YUV422;
+			}
+			else {
+				para->cs = COLORSPACE_RGB444;
+			}
+		}
+	}
+
+	// force colorspace for dedicated 420 modes
+	/* For Y420 modes */
+	switch (vic) {
+	case HDMI_3840x2160p50_16x9_Y420:
+	case HDMI_3840x2160p60_16x9_Y420:
+	case HDMI_4096x2160p50_256x135_Y420:
+	case HDMI_4096x2160p60_256x135_Y420:
+		para->cs = COLORSPACE_YUV420;
+	default:
+		break;
+	}
+	
+	// force RGB for DVI mode
+	if (odroid_voutmode() == VOUTMODE_DVI || hdev->rxcap.ieeeoui != HDMI_IEEEOUI) {
+		hdev->para->cs = COLORSPACE_RGB444;
+	}
+	
+	// no 16 bit mode for YUV422
+	if (para->cs == COLORSPACE_YUV422 && para->cd == COLORDEPTH_48B) {
+		para->cd = COLORDEPTH_36B;
+	}
+	
+	// check colordepth against edid capabilities
+	bool force_deep_color = strstr(hdmitx_device.fmt_attr,"10bit") !=NULL ||
+							strstr(hdmitx_device.fmt_attr,"12bit") !=NULL ||
+							strstr(hdmitx_device.fmt_attr,"16bit") !=NULL;
+	
+	if (para->cd > COLORDEPTH_24B && !force_deep_color) {
+		if (para->cs == COLORSPACE_YUV420) {
+			// sequentially fall back until reaching a supported color depth
+			if (!hdev->rxcap.dc_48bit_420 && para->cd == COLORDEPTH_48B) {
+				para->cd = COLORDEPTH_36B;
+			}
+			if (!hdev->rxcap.dc_36bit_420 && para->cd == COLORDEPTH_36B) {
+				para->cd = COLORDEPTH_30B;
+			}
+			if (!hdev->rxcap.dc_30bit_420 && para->cd == COLORDEPTH_30B) {
+				para->cd = COLORDEPTH_24B;
+			}
+		}
+		else if (para->cs == COLORSPACE_YUV444 || para->cs == COLORSPACE_RGB444)  {
+			if (!(hdev->rxcap.ColorDeepSupport & (1<<6)) && para->cd == COLORDEPTH_48B) {
+				para->cd = COLORDEPTH_36B;
+			}
+			if (!(hdev->rxcap.ColorDeepSupport & (1<<5)) && para->cd == COLORDEPTH_36B) {
+				para->cd = COLORDEPTH_30B;
+			}
+			if (!(hdev->rxcap.ColorDeepSupport & (1<<4)) && para->cd == COLORDEPTH_30B) {
+				para->cd = COLORDEPTH_24B;
+			}
+			
+			if (!(hdev->rxcap.ColorDeepSupport & (1<<3)) && para->cs == COLORSPACE_YUV444) {
+				para->cd = COLORDEPTH_24B;
+			}
+		}
+		else if (para->cs == COLORSPACE_YUV422) {
+			// 10 bit is just zero-padded in 12-bit, so only the 12bit flag needs to be checked
+			if (!(hdev->rxcap.ColorDeepSupport & (1<<5))) {
+				para->cd = COLORDEPTH_24B;
+			}
+		}
+	}
+	
+	// 4k50/60Hz can't support deep colour for 444 modes on hdmi 2.0, fall back to 8 bit
+	switch ((para->vic) & 0xff) {
+		case HDMI_3840x2160p50_16x9:
+		case HDMI_3840x2160p60_16x9:
+		case HDMI_4096x2160p50_256x135:
+		case HDMI_4096x2160p60_256x135:
+		case HDMI_3840x2160p50_64x27:
+		case HDMI_3840x2160p60_64x27:
+			if ( (para->cs == COLORSPACE_YUV444 || para->cs == COLORSPACE_RGB444) && para->cd > COLORDEPTH_24B) {
+				pr_warn("4k50/60Hz not supported for 10bits 444, falling back to 8bit color depth\n");
+				para->cd = COLORDEPTH_24B;
+			}
+			break;
+		default:
+			break;
+	}
+	
+	// force parameters for VESA modes unless explicitly overridden
+	bool forceyuv = strstr(hdmitx_device.fmt_attr,"420") !=NULL ||
+					strstr(hdmitx_device.fmt_attr,"422") !=NULL ||
+					strstr(hdmitx_device.fmt_attr,"444") !=NULL;
+			
+	bool force_lim_range = strstr(hdmitx_device.fmt_attr,"lim") !=NULL;
+					
+	// TODO should we allow this to be overridden?
+	if (vic >= HDMITX_VESA_OFFSET) {
+		if (!forceyuv) {
+			hdev->para->cs = COLORSPACE_RGB444;
+		}
+		if (!force_deep_color) {
+			hdev->para->cd = COLORDEPTH_24B;
+		}
+		if (!force_lim_range) {
+			hdev->para->cr = COLORRANGE_FUL;
+		}
+		pr_info("hdmitx: VESA only support RGB format\n");
+	}
+	
+	pr_err("set_disp_mode_auto: para->cs = %d, para->cd = %d, para->cr = %d\n", para->cs, para->cd, para->cr);
+	
+	// override color format in video para->hdmitx_vinfo for downstream usage
+	if (para->cs == COLORSPACE_RGB444) {
+		para->hdmitx_vinfo.viu_color_fmt = COLOR_FMT_RGB444;
+	}
+	else if (para->cs == COLORSPACE_YUV444) {
+		para->hdmitx_vinfo.viu_color_fmt = COLOR_FMT_YUV444;
+	}
+	else if (para->cs == COLORSPACE_YUV422) {
+		para->hdmitx_vinfo.viu_color_fmt = COLOR_FMT_YUV422;
+	}
+	else if (para->cs == COLORSPACE_YUV420) {
+		// this is the closest match, but actually the exact value
+		// doesn't matter since it's just used to distinguish
+		// YUV vs RGB and detect changes in format
+		para->hdmitx_vinfo.viu_color_fmt = COLOR_FMT_NV12;
+	}
+	else {
+		para->hdmitx_vinfo.viu_color_fmt = COLOR_FMT_YUV444;
+	}
+	// set color range in video para->hdmitx_vinfo for downstream use
+	para->hdmitx_vinfo.col_range = para->cr;
+	
+	// set default colorspace for downstream use to
+	// match avipara->hdmitx_vinfo InfoFrame
+	switch (vic) {
+		case HDMI_640x480p60_4x3:
+		case HDMI_720x480p60_4x3:
+		case HDMI_720x480p60_16x9:
+		case HDMI_720x480i60_4x3:
+		case HDMI_720x480i60_16x9:
+		case HDMI_720x240p60_4x3:
+		case HDMI_720x240p60_16x9:
+		case HDMI_2880x480i60_4x3:
+		case HDMI_2880x480i60_16x9:
+		case HDMI_2880x240p60_4x3:
+		case HDMI_2880x240p60_16x9:
+		case HDMI_1440x480p60_4x3:
+		case HDMI_1440x480p60_16x9:
+		case HDMI_720x576p50_4x3:
+		case HDMI_720x576p50_16x9:
+		case HDMI_720x576i50_4x3:
+		case HDMI_720x576i50_16x9:
+		case HDMI_720x288p_4x3:
+		case HDMI_720x288p_16x9:
+		case HDMI_2880x576i50_4x3:
+		case HDMI_2880x576i50_16x9:
+		case HDMI_2880x288p50_4x3:
+		case HDMI_2880x288p50_16x9:
+		case HDMI_1440x576p_4x3:
+		case HDMI_1440x576p_16x9:
+		case HDMI_2880x480p60_4x3:
+		case HDMI_2880x480p60_16x9:
+		case HDMI_2880x576p50_4x3:
+		case HDMI_2880x576p50_16x9:
+		case HDMI_720x576p100_4x3:
+		case HDMI_720x576p100_16x9:
+		case HDMI_720x576i100_4x3:
+		case HDMI_720x576i100_16x9:
+		case HDMI_720x480p120_4x3:
+		case HDMI_720x480p120_16x9:
+		case HDMI_720x480i120_4x3:
+		case HDMI_720x480i120_16x9:
+		case HDMI_720x576p200_4x3:
+		case HDMI_720x576p200_16x9:
+		case HDMI_720x576i200_4x3:
+		case HDMI_720x576i200_16x9:
+		case HDMI_720x480p240_4x3:
+		case HDMI_720x480p240_16x9:
+		case HDMI_720x480i240_4x3:
+		case HDMI_720x480i240_16x9:
+			para->hdmitx_vinfo.default_colorspace = VINFO_BT601;
+			break;
+		default:
+			para->hdmitx_vinfo.default_colorspace = VINFO_BT709;
+			break;
+	}
+	
+	hdev->para = para;
+	
+	
 	if ((vic_ready != HDMI_Unknown) && (vic_ready == vic) && (strstr(hdmitx_device.fmt_attr,"now") == NULL)) {
 		pr_info(SYS "[%s] ALREADY init VIC = %d\n",
 			__func__, vic);

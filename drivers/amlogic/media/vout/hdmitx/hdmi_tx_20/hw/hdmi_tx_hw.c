@@ -939,12 +939,13 @@ static void hdmi_tvenc1080i_set(struct hdmitx_vidpara *param)
 		hd_write_reg(P_ENCP_DVI_VSO_END_ODD, vso_begin_odd);
 	}
 
+	// bit 5 is channel ordering:  RGB for RGB modes, or CbYCr (GRB) otherwise
 	hd_write_reg(P_VPU_HDMI_SETTING, (0 << 0) |
 		(0 << 1) |
 		(HSYNC_POLARITY << 2) |
 		(VSYNC_POLARITY << 3) |
 		(0 << 4) |
-		(4 << 5) |
+		( (param->color == COLORSPACE_RGB444 ? 1 : 4) << 5) |
 		(0 << 8) |
 		(0 << 12)
 	);
@@ -1137,7 +1138,7 @@ static void hdmi_tvenc4k2k_set(struct hdmitx_vidpara *param)
 			(HSYNC_POLARITY << 2) |
 			(VSYNC_POLARITY << 3) |
 			(0 << 4) |
-			(4 << 5) |
+			( (param->color == COLORSPACE_RGB444 ? 1 : 4) << 5) |
 			(0 << 8) |
 			(0 << 12)
 	);
@@ -1316,7 +1317,7 @@ static void hdmi_tvenc480i_set(struct hdmitx_vidpara *param)
 			(0 << 2) |
 			(0 << 3) |
 			(0 << 4) |
-			(4 << 5) |
+			( (param->color == COLORSPACE_RGB444 ? 1 : 4) << 5) |
 			(1 << 8) |
 			(1 << 12)
 	);
@@ -1431,7 +1432,7 @@ static void hdmi_tvenc_vesa_set(struct hdmitx_vidpara *param)
 				(0 << 2) |
 				(0 << 3) |
 				(0 << 4) |
-				(4 << 5) |
+				( (param->color == COLORSPACE_RGB444 ? 1 : 4) << 5) |
 				(0 << 8) |
 				(0 << 12)
 		);
@@ -1443,7 +1444,7 @@ static void hdmi_tvenc_vesa_set(struct hdmitx_vidpara *param)
 				(HSYNC_POLARITY << 2) |
 				(VSYNC_POLARITY << 3) |
 				(0 << 4) |
-				(4 << 5) |
+				( (param->color == COLORSPACE_RGB444 ? 1 : 4) << 5) |
 				(0 << 8) |
 				(0 << 12)
 		);
@@ -1781,7 +1782,7 @@ static void hdmi_tvenc_set(struct hdmitx_vidpara *param)
 				(0 << 2) |
 				(0 << 3) |
 				(0 << 4) |
-				(4 << 5) |
+				( (param->color == COLORSPACE_RGB444 ? 1 : 4) << 5) |
 				(1 << 8) |
 				(1 << 12)
 		);
@@ -1822,7 +1823,7 @@ static void hdmi_tvenc_set(struct hdmitx_vidpara *param)
 			(HSYNC_POLARITY << 2) |
 			(VSYNC_POLARITY << 3) |
 			(0 << 4) |
-			(4 << 5) |
+			( (param->color == COLORSPACE_RGB444 ? 1 : 4) << 5) |
 			(0 << 8) |
 			(0 << 12)
 		);
@@ -1839,7 +1840,7 @@ static void hdmi_tvenc_set(struct hdmitx_vidpara *param)
 				(0 << 2) |
 				(0 << 3) |
 				(0 << 4) |
-				(4 << 5) |
+				( (param->color == COLORSPACE_RGB444 ? 1 : 4) << 5) |
 				(0 << 8) |
 				(0 << 12)
 		);
@@ -1855,7 +1856,7 @@ static void hdmi_tvenc_set(struct hdmitx_vidpara *param)
 				(HSYNC_POLARITY << 2) |
 				(VSYNC_POLARITY << 3) |
 				(0 << 4) |
-				(4 << 5) |
+				( (param->color == COLORSPACE_RGB444 ? 1 : 4) << 5) |
 				(0 << 8) |
 				(0 << 12)
 		);
@@ -1867,7 +1868,7 @@ static void hdmi_tvenc_set(struct hdmitx_vidpara *param)
 				(HSYNC_POLARITY << 2) |
 				(VSYNC_POLARITY << 3) |
 				(0 << 4) |
-				(4 << 5) |
+				( (param->color == COLORSPACE_RGB444 ? 1 : 4) << 5) |
 				(0 << 8) |
 				(0 << 12)
 		);
@@ -2267,11 +2268,16 @@ void hdmitx_set_enc_hw(struct hdmitx_dev *hdev)
 	}
 	/* [ 3: 2] chroma_dnsmp. 0=use pixel 0; 1=use pixel 1; 2=use average. */
 	/* [	5] hdmi_dith_md: random noise selector. */
-	hd_write_reg(P_VPU_HDMI_FMT_CTRL, (((TX_INPUT_COLOR_FORMAT ==
-			COLORSPACE_YUV420) ? 2 : 0)  << 0) | (2 << 2) |
+	hd_write_reg(P_VPU_HDMI_FMT_CTRL,
+				(0 << 0) // no format conversion by default
+    |			(2 << 2) | // use average of pixels if converting
 				(0 << 4) | /* [4]dith_en: disable dithering */
 				(0	<< 5) |
 				(0 << 6)); /* [ 9: 6] hdmi_dith10_cntl. */
+	// TODO check more carefully if this should be hdev->para->cs
+	// or rather hdev->cur_video_param->color, analogous to
+	// what is done for color depth
+	pr_err("hdmitx_set_enc_hw: hdev->para->cs = %d, hdev->cur_video_param->color = %d\n", hdev->para->cs, hdev->cur_video_param->color);
 	if (hdev->para->cs == COLORSPACE_YUV420) {
 		hd_set_reg_bits(P_VPU_HDMI_FMT_CTRL, 2, 0, 2);
 		hd_set_reg_bits(P_VPU_HDMI_SETTING, 0, 4, 4);
@@ -2282,15 +2288,37 @@ void hdmitx_set_enc_hw(struct hdmitx_dev *hdev)
 		hd_set_reg_bits(P_VPU_HDMI_FMT_CTRL, 1, 0, 2);
 		hd_set_reg_bits(P_VPU_HDMI_SETTING, 0, 4, 4);
 	}
-
+	
+	pr_err("hdmitx_set_enc_hw: hdev->para->cd = %d, hdev->cur_video_param->color_depth = %d\n", hdev->para->cd, hdev->cur_video_param->color_depth);
 	switch (hdev->cur_video_param->color_depth) {
-	case COLORDEPTH_30B:
-	case COLORDEPTH_36B:
 	case COLORDEPTH_48B:
+	case COLORDEPTH_36B:
+		if (hdev->chip_type >= MESON_CPU_ID_GXM) {
+			unsigned int hs_flag = 0;
+			/* 12-10 dithering off */
+			hd_set_reg_bits(P_VPU_HDMI_FMT_CTRL, 0, 4, 1);
+			/* hsync/vsync not invert */
+			hs_flag = (hd_read_reg(P_VPU_HDMI_SETTING) >> 2) & 0x3;
+			hd_set_reg_bits(P_VPU_HDMI_SETTING, 0, 2, 2);
+			/* 12-10 rounding off */
+			hd_set_reg_bits(P_VPU_HDMI_FMT_CTRL, 0, 10, 1);
+			/* 10-8 dithering off (2x2 old dither) */
+			hd_set_reg_bits(P_VPU_HDMI_DITH_CNTL, 0, 4, 1);
+			/* set hsync/vsync */
+			hd_set_reg_bits(P_VPU_HDMI_DITH_CNTL, hs_flag, 2, 2);
+		} else {
+			hd_set_reg_bits(P_VPU_HDMI_FMT_CTRL, 0, 4, 1);
+			hd_set_reg_bits(P_VPU_HDMI_FMT_CTRL, 0, 10, 1);
+		}
+	break;
+	case COLORDEPTH_30B:
 		if (hdev->chip_type >= MESON_CPU_ID_GXM) {
 			unsigned int hs_flag = 0;
 			/* 12-10 dithering on */
-			hd_set_reg_bits(P_VPU_HDMI_FMT_CTRL, 0, 4, 1);
+			// TODO check that this is really 12->10 dithering and not 10->8
+			// since the datasheet possibly has a typo
+			hd_set_reg_bits(P_VPU_HDMI_FMT_CTRL, 1, 4, 1);
+// 			hd_set_reg_bits(P_VPU_HDMI_FMT_CTRL, 0, 4, 1);
 			/* hsync/vsync not invert */
 			hs_flag = (hd_read_reg(P_VPU_HDMI_SETTING) >> 2) & 0x3;
 			hd_set_reg_bits(P_VPU_HDMI_SETTING, 0, 2, 2);
@@ -5049,7 +5077,7 @@ static int hdmitx_hdmi_dvi_config(struct hdmitx_dev *hdev,
 						unsigned int dvi_mode)
 {
 	if (dvi_mode == 1) {
-		hdmitx_csc_config(TX_INPUT_COLOR_FORMAT,
+		hdmitx_csc_config(hdev->para->cs,
 			COLORSPACE_RGB444, TX_COLOR_DEPTH);
 
 		/* set dvi flag */
@@ -5497,7 +5525,8 @@ void hdmitx_set_avi_colorimetry(struct hdmi_format_para *para)
 		hdmitx_set_reg_bits(HDMITX_DWC_FC_AVICONF2, 0, 4, 3);
 		break;
 	default:
-		if (hdev->colormetry) {
+		if (hdev->colormetry && hdev->hdr_color_feature == C_BT2020) {
+			// BT2020 with extended colorimetry bits
 			hdmitx_set_reg_bits(HDMITX_DWC_FC_AVICONF1, 3, 6, 2);
 			hdmitx_set_reg_bits(HDMITX_DWC_FC_AVICONF2, 6, 4, 3);
 		} else {
@@ -5848,6 +5877,19 @@ static void config_hdmi20_tx(enum hdmi_vic vic,
 
 	hdmitx_wr_reg(HDMITX_DWC_FC_AVICONF1, 0x8);
 	hdmitx_wr_reg(HDMITX_DWC_FC_AVICONF2, 0);
+	
+	// write RGB quantization bits only if support indicated by EDID
+	// TODO should this be set for YUV modes?
+	unsigned int valQ = 0;
+	if (hdev->rxcap.vcdb & (1<<6)) {
+		if (hdev->para->cr == COLORRANGE_LIM) {
+			valQ = 1;
+		}
+		else if (hdev->para->cr == COLORRANGE_FUL) {
+			valQ = 2;
+		}
+	}
+	hdmitx_set_reg_bits(HDMITX_DWC_FC_AVICONF2, valQ, 2, 2);
 
 	/* set Aspect Ratio in AVIInfo */
 	switch (para->vic) {
@@ -5890,10 +5932,39 @@ static void config_hdmi20_tx(enum hdmi_vic vic,
 		hdev->hwop.cntlconfig(hdev, CONF_AVI_BT2020, SET_AVI_BT2020);
 
 	data32  = 0;
-	data32 |= (((0 == COLORRANGE_FUL) ? 1 : 0) << 2);
+	data32 |= (0 << 2);
 	data32 |= (0 << 0);
 	hdmitx_wr_reg(HDMITX_DWC_FC_AVICONF3,   data32);
+	
+	if (hdev->para->cs != COLORSPACE_RGB444 && hdev->rxcap.vcdb & (1<<7)) {
+		// explicit YCC quantization selection allowed by EDID,
+		// set based on configured range
+		if (hdev->para->cr == COLORRANGE_LIM) {
+			hdmitx_set_reg_bits(HDMITX_DWC_FC_AVICONF3, 0, 2, 2);
+		}
+		else if (hdev->para->cr == COLORRANGE_FUL) {
+			hdmitx_set_reg_bits(HDMITX_DWC_FC_AVICONF3, 1, 2, 2);
+		}
+	}
+	else {
+		// follow RGB output if set
+		if (hdev->para->cs == COLORSPACE_RGB444  && valQ > 0) {
+			hdmitx_set_reg_bits(HDMITX_DWC_FC_AVICONF3, valQ-1, 2, 2);
+		}
+		else {
+		// explicit selection not allowed, set based on mode
+			if (para->vic >= HDMITX_VESA_OFFSET) {
+				// full range for pc mode
+				hdmitx_set_reg_bits(HDMITX_DWC_FC_AVICONF3, 1, 2, 2);
+			}
+			else {
+				// limited range for ce mode
+				hdmitx_set_reg_bits(HDMITX_DWC_FC_AVICONF3, 0, 2, 2);
+			}
+		}
+	}
 
+	
 	hdmitx_wr_reg(HDMITX_DWC_FC_AVIVID, (para->vic & HDMITX_VIC_MASK));
 
 	/* For VESA modes, set VIC as 0 */
@@ -6200,6 +6271,7 @@ static void hdmitx_csc_config(unsigned char input_color_format,
 
 	if (conv_en) {
 		if (output_color_format == COLORSPACE_RGB444) {
+			pr_err("hdmitx_csc_config: yuv2rgb\n");
 			csc_coeff_a1 = 0x2000;
 			csc_coeff_a2 = 0x6926;
 			csc_coeff_a3 = 0x74fd;
@@ -6224,6 +6296,7 @@ static void hdmitx_csc_config(unsigned char input_color_format,
 			(color_depth == COLORDEPTH_48B) ? 0x63a6 : 0x7e3b;
 		csc_scale = 1;
 	} else { /* input_color_format == COLORSPACE_RGB444 */
+		pr_err("hdmitx_csc_config: rgb2yuv\n");
 		csc_coeff_a1 = 0x2591;
 		csc_coeff_a2 = 0x1322;
 		csc_coeff_a3 = 0x074b;
@@ -6245,6 +6318,7 @@ static void hdmitx_csc_config(unsigned char input_color_format,
 		csc_scale = 0;
 	}
 	} else {
+		pr_err("hdmitx_csc_config: passthrough\n");
 		csc_coeff_a1 = 0x2000;
 		csc_coeff_a2 = 0x0000;
 		csc_coeff_a3 = 0x0000;
@@ -6337,6 +6411,6 @@ static void hdmitx_set_hw(struct hdmitx_dev *hdev)
 
 	config_hdmi20_tx(vic, hdev,
 			hdev->cur_video_param->color_depth,
-			TX_INPUT_COLOR_FORMAT,
+			hdev->para->cs,
 			hdev->para->cs);
 }
